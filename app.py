@@ -35,72 +35,91 @@ st.success("Logged in successfully!")
 # Transformer label
 transformer_name = st.text_input("Transformer Name / ID", "Transformer A")
 
-# Upload CSV
+# ------------------- UPLOAD CSV AND PLOT -------------------
 st.subheader("Upload DGA CSV File")
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+    try:
+        # Read CSV and clean column names
+        df = pd.read_csv(uploaded_file)
+        df.columns = df.columns.str.strip()  # remove extra spaces
+        st.write("Columns detected in CSV:", df.columns.tolist())
 
-    # Try convert sampling date
-    if "Sampling Date" in df.columns:
-        try:
+        # Check if Sampling Date column exists
+        if "Sampling Date" not in df.columns:
+            st.error("CSV must contain a 'Sampling Date' column.")
+            st.stop()
+        else:
             df["Sampling Date"] = pd.to_datetime(df["Sampling Date"], errors="coerce")
-        except:
-            st.warning("Could not convert sampling dates.")
+            if df["Sampling Date"].isnull().all():
+                st.warning("All 'Sampling Date' values could not be converted to datetime.")
 
-    st.write("### Raw Uploaded Data")
-    st.dataframe(df)
+        # Display raw data
+        st.write("### Raw Uploaded Data")
+        st.dataframe(df)
 
-    # ------------------ GRAPH ------------------
-    st.write("### Trend Graph")
-    numeric_cols = df.select_dtypes(include=["float", "int"]).columns
+        # Find numeric columns
+        numeric_cols = df.select_dtypes(include=["float", "int"]).columns
+        if len(numeric_cols) == 0:
+            st.error("No numeric columns found for plotting.")
+            st.stop()
 
-    selected_gas = st.selectbox("Select parameter to plot", numeric_cols)
+        # Select gas/parameter to plot
+        selected_gas = st.selectbox("Select parameter to plot", numeric_cols)
 
-    fig = px.line(df, x="Sampling Date", y=selected_gas, markers=True,
-                  title=f"Trend of {selected_gas} for {transformer_name}")
-    st.plotly_chart(fig)
+        # Ensure selected_gas has data
+        if df[selected_gas].isnull().all():
+            st.error(f"No data found for '{selected_gas}' column.")
+            st.stop()
 
-    # ------------------ TREND ANALYSIS ------------------
-    st.write("### Trend Analysis")
-    clean = df[["Sampling Date", selected_gas]].dropna()
-    if len(clean) > 1:
-        slope = np.polyfit(range(len(clean)), clean[selected_gas], 1)[0]
-        if slope > 0:
-            st.info(f"**{selected_gas} is increasing over time.** Potential fault worsening.")
-        elif slope < 0:
-            st.info(f"**{selected_gas} is decreasing over time.** Condition improving.")
+        # Plot trend graph
+        fig = px.line(df, x="Sampling Date", y=selected_gas, markers=True,
+                      title=f"Trend of {selected_gas} for {transformer_name}")
+        st.plotly_chart(fig)
+
+        # ------------------ TREND ANALYSIS ------------------
+        st.write("### Trend Analysis")
+        clean = df[["Sampling Date", selected_gas]].dropna()
+        if len(clean) > 1:
+            slope = np.polyfit(range(len(clean)), clean[selected_gas], 1)[0]
+            if slope > 0:
+                st.info(f"**{selected_gas} is increasing over time.** Potential fault worsening.")
+            elif slope < 0:
+                st.info(f"**{selected_gas} is decreasing over time.** Condition improving.")
+            else:
+                st.info(f"**{selected_gas} is stable.** No major trend.")
         else:
-            st.info(f"**{selected_gas} is stable.** No major trend.")
-    else:
-        st.write("Not enough data for trend analysis.")
+            st.write("Not enough data for trend analysis.")
 
-    # ------------------ AI RECOMMENDATION ------------------
-    st.write("### AI Recommendation (Simple Rule-Based)")
-    last_value = clean[selected_gas].iloc[-1]
+        # ------------------ AI RECOMMENDATION ------------------
+        st.write("### AI Recommendation (Simple Rule-Based)")
+        last_value = clean[selected_gas].iloc[-1]
 
-    if "Hydrogen" in selected_gas or "H2" in selected_gas:
-        if last_value > 500:
-            st.error("High Hydrogen detected — possible partial discharge or overheating.")
+        if "Hydrogen" in selected_gas or "H2" in selected_gas:
+            if last_value > 500:
+                st.error("High Hydrogen detected — possible partial discharge or overheating.")
+            else:
+                st.success("Hydrogen levels normal.")
+
+        elif "Methane" in selected_gas or "CH4" in selected_gas:
+            if last_value > 300:
+                st.error("High Methane — overheating risk.")
+            else:
+                st.success("Methane levels normal.")
+
+        elif "TDCG" in selected_gas:
+            if last_value > 720:
+                st.error("TDCG very high — urgent maintenance required.")
+            elif last_value > 300:
+                st.warning("TDCG moderately high — monitor closely.")
+            else:
+                st.success("TDCG normal.")
         else:
-            st.success("Hydrogen levels normal.")
+            st.info("No predefined rule for this parameter yet.")
 
-    elif "Methane" in selected_gas or "CH4" in selected_gas:
-        if last_value > 300:
-            st.error("High Methane — overheating risk.")
-        else:
-            st.success("Methane levels normal.")
-
-    elif "TDCG" in selected_gas:
-        if last_value > 720:
-            st.error("TDCG very high — urgent maintenance required.")
-        elif last_value > 300:
-            st.warning("TDCG moderately high — monitor closely.")
-        else:
-            st.success("TDCG normal.")
-    else:
-        st.info("No predefined rule for this parameter yet.")
+    except Exception as e:
+        st.error(f"Error reading CSV: {e}")
 
 else:
     st.info("Please upload your DGA CSV file to begin analysis.")
