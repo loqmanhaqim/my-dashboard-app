@@ -6,8 +6,8 @@ import streamlit as st
 # -------------------------------------------
 # SIMPLE LOGIN (HARDCODED USERNAME & PASSWORD)
 # -------------------------------------------
-USERNAME = "admin"
-PASSWORD = "1234"
+USERNAME = "ketam"
+PASSWORD = "ketam123"
 
 st.title("Transformer Oil Sampling Anlysis Trend Development")
 
