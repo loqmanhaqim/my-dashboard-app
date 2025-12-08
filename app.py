@@ -9,7 +9,7 @@ import streamlit as st
 USERNAME = "admin"
 PASSWORD = "1234"
 
-st.title("Transformer Oil DGA Dashboard")
+st.title("Transformer Oil Sampling Anlysis Trend Development")
 
 # --- LOGIN STATE ---
 if "logged_in" not in st.session_state:
