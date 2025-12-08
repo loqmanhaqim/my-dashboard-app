@@ -14,9 +14,9 @@ PASSWORD = "1234"
 st.title("Transformer Oil DGA Dashboard")
 
 
-# ---- LOGIN FORM ----
+# --- LOGIN STATE ---
 if "logged_in" not in st.session_state:
-st.session_state.logged_in = False
+    st.session_state.logged_in = False
 
 
 if not st.session_state.logged_in:
