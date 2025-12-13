@@ -23,9 +23,12 @@ if not st.session_state.logged_in:
     if st.button("Login"):
         if user == USERNAME and pwd == PASSWORD:
             st.session_state.logged_in = True
+            st.experimental_rerun()  # refresh app after login
         else:
             st.error("Incorrect username or password.")
-        st.stop()
+
+    # 🔴 IMPORTANT: stop everything below if not logged in
+    st.stop()
 
 # -------------------------------------------
 # AFTER LOGIN — MAIN DASHBOARD
