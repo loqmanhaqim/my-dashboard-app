@@ -9,7 +9,7 @@ import streamlit as st
 USERNAME = "ketam"
 PASSWORD = "ketam123"
 
-st.title("Transformer Oil Sampling Anlysis Trend Development")
+st.title("Transformer Oil Sampling Analysis Trend Development")
 
 # --- LOGIN STATE ---
 if "logged_in" not in st.session_state:
@@ -23,11 +23,11 @@ if not st.session_state.logged_in:
     if st.button("Login"):
         if user == USERNAME and pwd == PASSWORD:
             st.session_state.logged_in = True
-            st.experimental_rerun()  # refresh app after login
+            st.experimental_rerun()
         else:
             st.error("Incorrect username or password.")
 
-    # 🔴 IMPORTANT: stop everything below if not logged in
+    # 🚫 Stop app here if not logged in
     st.stop()
 
 # -------------------------------------------
@@ -38,91 +38,100 @@ st.success("Logged in successfully!")
 # Transformer label
 transformer_name = st.text_input("Transformer Name / ID", "Transformer A")
 
-# ------------------- UPLOAD CSV AND PLOT -------------------
+# ------------------- UPLOAD CSV -------------------
 st.subheader("Upload DGA CSV File")
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded_file:
     try:
-        # Read CSV and clean column names
+        # Read CSV
         df = pd.read_csv(uploaded_file)
-        df.columns = df.columns.str.strip()  # remove extra spaces
-        st.write("Columns detected in CSV:", df.columns.tolist())
+        df.columns = df.columns.str.strip()
 
-        # Check if Sampling Date column exists
+        st.write("Columns detected:", df.columns.tolist())
+
+        # Check Sampling Date
         if "Sampling Date" not in df.columns:
-            st.error("CSV must contain a 'Sampling Date' column.")
+            st.error("CSV must contain 'Sampling Date' column.")
             st.stop()
-        else:
-            df["Sampling Date"] = pd.to_datetime(df["Sampling Date"], errors="coerce")
-            if df["Sampling Date"].isnull().all():
-                st.warning("All 'Sampling Date' values could not be converted to datetime.")
 
-        # Display raw data
+        # Convert Sampling Date
+        df["Sampling Date"] = pd.to_datetime(df["Sampling Date"], errors="coerce")
+
+        # Convert all other columns to numeric
+        for col in df.columns:
+            if col != "Sampling Date":
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # Show data
         st.write("### Raw Uploaded Data")
         st.dataframe(df)
 
-        # Find numeric columns
+        # Detect numeric columns
         numeric_cols = df.select_dtypes(include=["float", "int"]).columns
+
         if len(numeric_cols) == 0:
-            st.error("No numeric columns found for plotting.")
+            st.error("No numeric DGA data found.")
             st.stop()
 
-        # Select gas/parameter to plot
-        selected_gas = st.selectbox("Select parameter to plot", numeric_cols)
+        # Select parameter
+        selected_gas = st.selectbox("Select DGA parameter", numeric_cols)
 
-        # Ensure selected_gas has data
-        if df[selected_gas].isnull().all():
-            st.error(f"No data found for '{selected_gas}' column.")
-            st.stop()
-
-        # Plot trend graph
-        fig = px.line(df, x="Sampling Date", y=selected_gas, markers=True,
-                      title=f"Trend of {selected_gas} for {transformer_name}")
+        # Plot
+        fig = px.line(
+            df,
+            x="Sampling Date",
+            y=selected_gas,
+            markers=True,
+            title=f"{selected_gas} Trend for {transformer_name}"
+        )
         st.plotly_chart(fig)
 
-        # ------------------ TREND ANALYSIS ------------------
-        st.write("### Trend Analysis")
+        # ---------------- TREND ANALYSIS ----------------
+        st.subheader("Trend Analysis")
         clean = df[["Sampling Date", selected_gas]].dropna()
+
         if len(clean) > 1:
             slope = np.polyfit(range(len(clean)), clean[selected_gas], 1)[0]
-            if slope > 0:
-                st.info(f"**{selected_gas} is increasing over time.** Potential fault worsening.")
-            elif slope < 0:
-                st.info(f"**{selected_gas} is decreasing over time.** Condition improving.")
-            else:
-                st.info(f"**{selected_gas} is stable.** No major trend.")
-        else:
-            st.write("Not enough data for trend analysis.")
 
-        # ------------------ AI RECOMMENDATION ------------------
-        st.write("### AI Recommendation (Simple Rule-Based)")
+            if slope > 0:
+                st.warning("Increasing trend detected — condition may be worsening.")
+            elif slope < 0:
+                st.success("Decreasing trend — condition improving.")
+            else:
+                st.info("Stable trend observed.")
+        else:
+            st.info("Not enough data for trend analysis.")
+
+        # ---------------- AI RECOMMENDATION ----------------
+        st.subheader("AI Recommendation (Rule-Based)")
         last_value = clean[selected_gas].iloc[-1]
 
         if "Hydrogen" in selected_gas or "H2" in selected_gas:
             if last_value > 500:
-                st.error("High Hydrogen detected — possible partial discharge or overheating.")
+                st.error("High Hydrogen: Possible partial discharge or overheating.")
             else:
-                st.success("Hydrogen levels normal.")
+                st.success("Hydrogen within acceptable range.")
 
         elif "Methane" in selected_gas or "CH4" in selected_gas:
             if last_value > 300:
-                st.error("High Methane — overheating risk.")
+                st.error("High Methane: Thermal fault suspected.")
             else:
-                st.success("Methane levels normal.")
+                st.success("Methane level normal.")
 
         elif "TDCG" in selected_gas:
             if last_value > 720:
-                st.error("TDCG very high — urgent maintenance required.")
+                st.error("Critical TDCG level — immediate maintenance required.")
             elif last_value > 300:
-                st.warning("TDCG moderately high — monitor closely.")
+                st.warning("Elevated TDCG — monitor closely.")
             else:
                 st.success("TDCG normal.")
+
         else:
-            st.info("No predefined rule for this parameter yet.")
+            st.info("No predefined diagnostic rule for this parameter.")
 
     except Exception as e:
-        st.error(f"Error reading CSV: {e}")
+        st.error(f"Error processing file: {e}")
 
 else:
-    st.info("Please upload your DGA CSV file to begin analysis.")
+    st.info("Please upload a CSV file to begin analysis.")
