@@ -10,7 +10,7 @@ from sklearn.tree import DecisionTreeClassifier
 USERNAME = "ketam"
 PASSWORD = "ketam123"
 
-st.title("Transformer Oil DGA Trend & ML Health Assessment")
+st.title("Transformer Oil DGA Trend & Health Assessment")
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -65,38 +65,6 @@ if file:
 
         st.dataframe(df)
 
-        # ----------------- ML FEATURE ENGINEERING -----------------
-        features = []
-        labels = []
-
-        for _, row in df.iterrows():
-            severity = 0  # Normal
-            row_features = []
-
-            for gas, limit in REFERENCE_LIMITS.items():
-                value = row.get(gas, np.nan)
-
-                # Safe numeric check
-                if isinstance(value, (int, float)) and not np.isnan(value):
-                    ratio = value / limit
-                    row_features.append(ratio)
-                    if ratio > 1:
-                        severity = 2  # Critical
-                    elif ratio > 0.5 and severity < 1:
-                        severity = 1  # Warning
-                else:
-                    row_features.append(0)
-
-            features.append(row_features)
-            labels.append(severity)
-
-        X = np.array(features)
-        y = np.array(labels)
-
-        # ----------------- TRAIN ML MODEL -----------------
-        model = DecisionTreeClassifier(max_depth=3)
-        model.fit(X, y)
-
         # ----------------- TREND GRAPH -----------------
         available_gases = [gas for gas in REFERENCE_LIMITS.keys() if gas in df.columns]
         if available_gases:
@@ -108,29 +76,42 @@ if file:
         else:
             st.warning("No DGA gas columns found in CSV for trend plotting.")
 
-        # ----------------- ML PREDICTION -----------------
-        if len(X) > 0:
-            latest = X[-1].reshape(1, -1)
-            prediction = model.predict(latest)[0]
+        # ----------------- DIRECT DGA-BASED CONDITION ASSESSMENT -----------------
+        if len(df) > 0:
+            latest_row = df.iloc[-1]
+            severity = 0
+            messages = []
 
-            st.subheader("ML-Based Transformer Condition")
+            for gas, limit in REFERENCE_LIMITS.items():
+                value = latest_row.get(gas, np.nan)
+                if isinstance(value, (int, float)) and not np.isnan(value):
+                    ratio = value / limit
+                    if ratio > 1:
+                        severity = max(severity, 2)
+                        messages.append(f"{gas} is above limit! Possible critical condition (e.g., high energy arcing for acetylene).")
+                    elif ratio > 0.5:
+                        severity = max(severity, 1)
+                        messages.append(f"{gas} is approaching limit. Warning condition.")
 
-            if prediction == 0:
+            st.subheader("Transformer Condition Based on Latest DGA Reading")
+
+            if severity == 0:
                 st.success("Normal Condition")
                 st.write("Gas levels are within acceptable IEC/IEEE limits. Continue routine monitoring.")
-
-            elif prediction == 1:
+            elif severity == 1:
                 st.warning("Warning Condition")
-                st.write("Some gases are approaching standard limits. Increase monitoring frequency and plan inspection.")
-
+                for msg in messages:
+                    st.write(msg)
             else:
                 st.error("Critical Condition")
-                st.write("One or more gases exceed IEC/IEEE limits. Immediate investigation and maintenance recommended.")
+                for msg in messages:
+                    st.write(msg)
         else:
-            st.info("Not enough data to predict transformer condition.")
+            st.info("Not enough data to assess transformer condition.")
 
     except Exception as e:
         st.error(f"Error reading CSV file: {e}")
 
 else:
     st.info("Upload a DGA CSV file to start analysis")
+info("Upload a DGA CSV file to start analysis")
