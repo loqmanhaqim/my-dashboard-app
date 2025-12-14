@@ -49,76 +49,88 @@ st.subheader("Upload DGA CSV File")
 file = st.file_uploader("Upload CSV", type=["csv"])
 
 if file:
-    df = pd.read_csv(file)
-    df.columns = df.columns.str.strip()
+    try:
+        df = pd.read_csv(file)
+        df.columns = df.columns.str.strip()
 
-    if "Sampling Date" not in df.columns:
-        st.error("Sampling Date column required")
-        st.stop()
+        if "Sampling Date" not in df.columns:
+            st.error("Sampling Date column is required in CSV")
+            st.stop()
 
-    df["Sampling Date"] = pd.to_datetime(df["Sampling Date"], errors="coerce")
+        # Convert date and numeric columns safely
+        df["Sampling Date"] = pd.to_datetime(df["Sampling Date"], errors="coerce")
+        for col in df.columns:
+            if col != "Sampling Date":
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    for col in df.columns:
-        if col != "Sampling Date":
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        st.dataframe(df)
 
-    st.dataframe(df)
+        # ----------------- ML FEATURE ENGINEERING -----------------
+        features = []
+        labels = []
 
-    # ----------------- ML FEATURE ENGINEERING -----------------
-    features = []
-    labels = []
+        for _, row in df.iterrows():
+            severity = 0  # Normal
+            row_features = []
 
-    for _, row in df.iterrows():
-        severity = 0  # Normal
-        row_features = []
+            for gas, limit in REFERENCE_LIMITS.items():
+                value = row.get(gas, np.nan)
 
-        for gas, limit in REFERENCE_LIMITS.items():
-            value = row.get(gas, np.nan)
-            if not np.isnan(value):
-                ratio = value / limit
-                row_features.append(ratio)
-                if ratio > 1:
-                    severity = 2  # Critical
-                elif ratio > 0.5 and severity < 1:
-                    severity = 1  # Warning
+                # Safe numeric check
+                if isinstance(value, (int, float)) and not np.isnan(value):
+                    ratio = value / limit
+                    row_features.append(ratio)
+                    if ratio > 1:
+                        severity = 2  # Critical
+                    elif ratio > 0.5 and severity < 1:
+                        severity = 1  # Warning
+                else:
+                    row_features.append(0)
+
+            features.append(row_features)
+            labels.append(severity)
+
+        X = np.array(features)
+        y = np.array(labels)
+
+        # ----------------- TRAIN ML MODEL -----------------
+        model = DecisionTreeClassifier(max_depth=3)
+        model.fit(X, y)
+
+        # ----------------- TREND GRAPH -----------------
+        available_gases = [gas for gas in REFERENCE_LIMITS.keys() if gas in df.columns]
+        if available_gases:
+            selected_gas = st.selectbox("Select Gas for Trend", available_gases)
+
+            fig = px.line(df, x="Sampling Date", y=selected_gas, markers=True,
+                          title=f"{selected_gas} Trend - {transformer_name}")
+            st.plotly_chart(fig)
+        else:
+            st.warning("No DGA gas columns found in CSV for trend plotting.")
+
+        # ----------------- ML PREDICTION -----------------
+        if len(X) > 0:
+            latest = X[-1].reshape(1, -1)
+            prediction = model.predict(latest)[0]
+
+            st.subheader("ML-Based Transformer Condition")
+
+            if prediction == 0:
+                st.success("Normal Condition")
+                st.write("Gas levels are within acceptable IEC/IEEE limits. Continue routine monitoring.")
+
+            elif prediction == 1:
+                st.warning("Warning Condition")
+                st.write("Some gases are approaching standard limits. Increase monitoring frequency and plan inspection.")
+
             else:
-                row_features.append(0)
+                st.error("Critical Condition")
+                st.write("One or more gases exceed IEC/IEEE limits. Immediate investigation and maintenance recommended.")
+        else:
+            st.info("Not enough data to predict transformer condition.")
 
-        features.append(row_features)
-        labels.append(severity)
-
-    X = np.array(features)
-    y = np.array(labels)
-
-    # ----------------- TRAIN ML MODEL -----------------
-    model = DecisionTreeClassifier(max_depth=3)
-    model.fit(X, y)
-
-    # ----------------- TREND GRAPH -----------------
-    numeric_cols = list(REFERENCE_LIMITS.keys())
-    selected_gas = st.selectbox("Select Gas for Trend", numeric_cols)
-
-    fig = px.line(df, x="Sampling Date", y=selected_gas, markers=True,
-                  title=f"{selected_gas} Trend - {transformer_name}")
-    st.plotly_chart(fig)
-
-    # ----------------- ML PREDICTION -----------------
-    latest = X[-1].reshape(1, -1)
-    prediction = model.predict(latest)[0]
-
-    st.subheader("ML-Based Transformer Condition")
-
-    if prediction == 0:
-        st.success("Normal Condition")
-        st.write("Gas levels are within acceptable IEC/IEEE limits. Continue routine monitoring.")
-
-    elif prediction == 1:
-        st.warning("Warning Condition")
-        st.write("Some gases are approaching standard limits. Increase monitoring frequency and plan inspection.")
-
-    else:
-        st.error("Critical Condition")
-        st.write("One or more gases exceed IEC/IEEE limits. Immediate investigation and maintenance recommended.")
+    except Exception as e:
+        st.error(f"Error reading CSV file: {e}")
 
 else:
     st.info("Upload a DGA CSV file to start analysis")
