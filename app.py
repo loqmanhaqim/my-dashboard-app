@@ -213,7 +213,6 @@ if selected_gas:
             # Critical (2x Limit)
             fig.add_hline(y=critical_limit_val, line_dash="dash", line_color="red", 
                           annotation_text=f"Critical Limit ({critical_limit_val} ppm)", annotation_position="bottom right")
-            
 
         fig.update_layout(
             title=f"{selected_gas} Concentration Trend & {forecast_years}-Year ML Forecast for {transformer_name}",
@@ -227,36 +226,18 @@ if selected_gas:
         # --- 6. ML & Rule-Based Conclusion/Recommendation ---
         st.subheader("💡 Analysis and AI Recommendation")
 
-        # --- Status Calculation (Internal use only for color/warnings) ---
+        # --- Status Calculation (Internal Check) ---
         latest_value_raw = df[selected_gas].iloc[-1]
         
-        # Determine internal status
+        # Determine internal status for error/limit checks only
         if pd.isna(latest_value_raw):
             current_status = '⚠️ Data Error'
-            metric_delta_text = "Data Error"
-            delta_color = 'off' 
         else:
             latest_value = latest_value_raw
             current_status = get_rule_based_status(latest_value, limit_value)
-            metric_delta_text = f"Limit: {limit_value} ppm"
-            
-            # Determine delta color (Kept for visual feedback on the metric itself)
-            if 'Critical' in current_status:
-                delta_color = 'inverse' # Red background
-            elif 'Warning' in current_status or 'Limit Required' in current_status:
-                delta_color = 'off' # Orange/Yellow background
-            else:
-                delta_color = 'normal' # Green background
 
-        # A. Rule-Based Status (Streamlined Output)
-        # Display the raw value and the limit comparison, WITHOUT the explicit status word (Green/Red/Orange)
-        st.metric(
-            f"Latest {selected_gas} Reading:", 
-            f"{latest_value_raw} ppm",
-            delta=metric_delta_text,
-            delta_color=delta_color
-        )
-
+        # A. Rule-Based Status (Removed Metric Display - ONLY ML RECOMMENDATION REMAINS)
+        # st.metric(...) is removed here.
 
         # B. ML Predictive Warning
         if limit_value > 0:
@@ -293,6 +274,10 @@ if selected_gas:
                 
         elif "Limit Required" in current_status:
              st.warning("Cannot provide predictive warning. Please define a positive Reference Limit to enable Rule-Based and ML analysis.")
+        
+        # Handle case where the latest data point was NaN (only show the warning if no ML recommendation can run)
+        elif 'Data Error' in current_status:
+             st.warning(f"Cannot provide full analysis or ML recommendation because the latest '{selected_gas}' data point is missing or invalid (nan).")
     
     elif model is None and forecast_results is None:
         st.error("Not enough data points (requires at least two annual samples) to run the ML forecast for this gas.")
