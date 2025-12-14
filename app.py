@@ -114,4 +114,4 @@ if file:
 
 else:
     st.info("Upload a DGA CSV file to start analysis")
-info("Upload a DGA CSV file to start analysis")
+
