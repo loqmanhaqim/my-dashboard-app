@@ -25,7 +25,7 @@ DGA_GASES = [
     "Carbon Dioxide (CO2)"
 ]
 
-# --- Rule-Based Analysis Function ---
+# --- Rule-Based Analysis Function (FIXED) ---
 def get_rule_based_status(value, limit):
     """
     Classifies concentration based on user-defined limit.
@@ -224,35 +224,24 @@ if selected_gas:
         )
         st.plotly_chart(fig, use_container_width=True)
 
+
         # --- 6. ML & Rule-Based Conclusion/Recommendation ---
         st.subheader("💡 Analysis and AI Recommendation")
-
-        # --- Status Calculation (FIXED TO HANDLE NaN) ---
-        latest_value_raw = df[selected_gas].iloc[-1]
         
-        # Check for NaN and handle explicitly
-        if pd.isna(latest_value_raw):
-            current_status = '⚠️ Data Error'
-            # Use the latest value for the metric display, even if NaN
-            metric_value = f"Data Error (nan ppm)"
+        latest_value = df[selected_gas].iloc[-1]
+        
+        # A. Rule-Based Status (Latest Sample)
+        current_status = get_rule_based_status(latest_value, limit_value)
+        
+        # Determine delta color for visual emphasis on the metric
+        if 'Critical' in current_status:
+            delta_color = 'inverse' 
+        elif 'Warning' in current_status:
             delta_color = 'off' 
         else:
-            latest_value = latest_value_raw
-            current_status = get_rule_based_status(latest_value, limit_value)
-            metric_value = current_status
+            delta_color = 'normal' 
             
-            # Determine delta color for visual emphasis on the metric
-            if 'Critical' in current_status:
-                delta_color = 'inverse' 
-            elif 'Warning' in current_status:
-                delta_color = 'off' 
-            elif 'Limit Required' in current_status:
-                delta_color = 'off'
-            else:
-                delta_color = 'normal' 
-
-        # A. Rule-Based Status (Latest Sample)
-        st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value_raw} ppm)", metric_value, delta_color=delta_color)
+        st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value} ppm)", current_status, delta_color=delta_color)
 
         # B. ML Predictive Warning
         if limit_value > 0:
