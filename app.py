@@ -16,19 +16,19 @@ st.title("Transformer Oil DGA Trend & ML Health Assessment")
 
 
 if "logged_in" not in st.session_state:
-st.session_state.logged_in = False
+  st.session_state.logged_in = False
 
 
 if not st.session_state.logged_in:
-st.subheader("Login Required")
-user = st.text_input("Username")
-pwd = st.text_input("Password", type="password")
+  st.subheader("Login Required")
+  user = st.text_input("Username")
+  pwd = st.text_input("Password", type="password")
 
 
 if st.button("Login"):
 if user == USERNAME and pwd == PASSWORD:
-st.session_state.logged_in = True
-st.experimental_rerun()
+  st.session_state.logged_in = True
+  st.experimental_rerun()
 else:
 st.error("Incorrect username or password")
 st.stop()
