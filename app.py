@@ -38,13 +38,13 @@ def get_rule_based_status(value, limit):
     CRITICAL_MULTIPLIER = 2 
     WARNING_MULTIPLIER = 1
     
-    # 2. Check Critical first (Red Line)
+    # 2. Check Critical first
     if value >= limit * CRITICAL_MULTIPLIER:
         return '🔴 Critical'
-    # 3. Check Warning (Orange Line)
+    # 3. Check Warning
     elif value >= limit * WARNING_MULTIPLIER:
         return '🟠 Warning'
-    # 4. Otherwise, Normal (Green)
+    # 4. Otherwise, Normal
     else:
         return '🟢 Normal'
 
@@ -213,6 +213,7 @@ if selected_gas:
             # Critical (2x Limit)
             fig.add_hline(y=critical_limit_val, line_dash="dash", line_color="red", 
                           annotation_text=f"Critical Limit ({critical_limit_val} ppm)", annotation_position="bottom right")
+            
 
         fig.update_layout(
             title=f"{selected_gas} Concentration Trend & {forecast_years}-Year ML Forecast for {transformer_name}",
@@ -226,21 +227,20 @@ if selected_gas:
         # --- 6. ML & Rule-Based Conclusion/Recommendation ---
         st.subheader("💡 Analysis and AI Recommendation")
 
-        # --- Status Calculation (FIXED and REFINED) ---
+        # --- Status Calculation (Internal use only for color/warnings) ---
         latest_value_raw = df[selected_gas].iloc[-1]
         
-        # Check for NaN first
+        # Determine internal status
         if pd.isna(latest_value_raw):
             current_status = '⚠️ Data Error'
-            metric_value = current_status
+            metric_delta_text = "Data Error"
             delta_color = 'off' 
         else:
             latest_value = latest_value_raw
-            # Run the Rule-Based classification
             current_status = get_rule_based_status(latest_value, limit_value)
-            metric_value = current_status
+            metric_delta_text = f"Limit: {limit_value} ppm"
             
-            # Determine delta color based on the classified status
+            # Determine delta color (Kept for visual feedback on the metric itself)
             if 'Critical' in current_status:
                 delta_color = 'inverse' # Red background
             elif 'Warning' in current_status or 'Limit Required' in current_status:
@@ -248,8 +248,15 @@ if selected_gas:
             else:
                 delta_color = 'normal' # Green background
 
-        # A. Rule-Based Status (Latest Sample)
-        st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value_raw} ppm)", metric_value, delta_color=delta_color)
+        # A. Rule-Based Status (Streamlined Output)
+        # Display the raw value and the limit comparison, WITHOUT the explicit status word (Green/Red/Orange)
+        st.metric(
+            f"Latest {selected_gas} Reading:", 
+            f"{latest_value_raw} ppm",
+            delta=metric_delta_text,
+            delta_color=delta_color
+        )
+
 
         # B. ML Predictive Warning
         if limit_value > 0:
