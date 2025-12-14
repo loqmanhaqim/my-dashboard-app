@@ -226,22 +226,27 @@ if selected_gas:
 
 
         # --- 6. ML & Rule-Based Conclusion/Recommendation ---
-        st.subheader("💡 Analysis and AI Recommendation")
-        
-        latest_value = df[selected_gas].iloc[-1]
-        
-        # A. Rule-Based Status (Latest Sample)
-        current_status = get_rule_based_status(latest_value, limit_value)
-        
-        # Determine delta color for visual emphasis on the metric
-        if 'Critical' in current_status:
-            delta_color = 'inverse' 
-        elif 'Warning' in current_status:
-            delta_color = 'off' 
-        else:
-            delta_color = 'normal' 
-            
-        st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value} ppm)", current_status, delta_color=delta_color)
+st.subheader("💡 Analysis and AI Recommendation")
+
+# FIX: Use .iloc[-1] to get the last value, then use .item() to pull the scalar value.
+# Also, explicitly check if the value is NaN before proceeding with the classification.
+latest_value_raw = df[selected_gas].iloc[-1]
+
+# Check for NaN and convert to a comparable number (or handle explicitly)
+if pd.isna(latest_value_raw):
+    latest_value = -1 # Use a negative number so it always triggers 'Limit Required' logic in the function
+    current_status = '⚠️ Data Error'
+    limit_value = st.session_state.ref_limits.get(selected_gas, 0)
+else:
+    latest_value = latest_value_raw
+    limit_value = st.session_state.ref_limits.get(selected_gas, 0)
+    current_status = get_rule_based_status(latest_value, limit_value)
+
+
+# A. Rule-Based Status (Latest Sample)
+# ...
+# Update the st.metric line to show the raw value correctly
+st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value_raw} ppm)", current_status, delta_color=delta_color)
 
         # B. ML Predictive Warning
         if limit_value > 0:
