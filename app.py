@@ -25,7 +25,7 @@ DGA_GASES = [
     "Carbon Dioxide (CO2)"
 ]
 
-# --- Rule-Based Analysis Function (FIXED) ---
+# --- Rule-Based Analysis Function ---
 def get_rule_based_status(value, limit):
     """
     Classifies concentration based on user-defined limit.
@@ -224,29 +224,35 @@ if selected_gas:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-
         # --- 6. ML & Rule-Based Conclusion/Recommendation ---
-st.subheader("💡 Analysis and AI Recommendation")
+        st.subheader("💡 Analysis and AI Recommendation")
 
-# FIX: Use .iloc[-1] to get the last value, then use .item() to pull the scalar value.
-# Also, explicitly check if the value is NaN before proceeding with the classification.
-latest_value_raw = df[selected_gas].iloc[-1]
+        # --- Status Calculation (FIXED TO HANDLE NaN) ---
+        latest_value_raw = df[selected_gas].iloc[-1]
+        
+        # Check for NaN and handle explicitly
+        if pd.isna(latest_value_raw):
+            current_status = '⚠️ Data Error'
+            # Use the latest value for the metric display, even if NaN
+            metric_value = f"Data Error (nan ppm)"
+            delta_color = 'off' 
+        else:
+            latest_value = latest_value_raw
+            current_status = get_rule_based_status(latest_value, limit_value)
+            metric_value = current_status
+            
+            # Determine delta color for visual emphasis on the metric
+            if 'Critical' in current_status:
+                delta_color = 'inverse' 
+            elif 'Warning' in current_status:
+                delta_color = 'off' 
+            elif 'Limit Required' in current_status:
+                delta_color = 'off'
+            else:
+                delta_color = 'normal' 
 
-# Check for NaN and convert to a comparable number (or handle explicitly)
-if pd.isna(latest_value_raw):
-    latest_value = -1 # Use a negative number so it always triggers 'Limit Required' logic in the function
-    current_status = '⚠️ Data Error'
-    limit_value = st.session_state.ref_limits.get(selected_gas, 0)
-else:
-    latest_value = latest_value_raw
-    limit_value = st.session_state.ref_limits.get(selected_gas, 0)
-    current_status = get_rule_based_status(latest_value, limit_value)
-
-
-# A. Rule-Based Status (Latest Sample)
-# ...
-# Update the st.metric line to show the raw value correctly
-st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value_raw} ppm)", current_status, delta_color=delta_color)
+        # A. Rule-Based Status (Latest Sample)
+        st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value_raw} ppm)", metric_value, delta_color=delta_color)
 
         # B. ML Predictive Warning
         if limit_value > 0:
