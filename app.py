@@ -25,7 +25,7 @@ DGA_GASES = [
     "Carbon Dioxide (CO2)"
 ]
 
-# --- Rule-Based Analysis Function (FIXED) ---
+# --- Rule-Based Analysis Function ---
 def get_rule_based_status(value, limit):
     """
     Classifies concentration based on user-defined limit.
@@ -38,13 +38,13 @@ def get_rule_based_status(value, limit):
     CRITICAL_MULTIPLIER = 2 
     WARNING_MULTIPLIER = 1
     
-    # 2. Check Critical first
+    # 2. Check Critical first (Red Line)
     if value >= limit * CRITICAL_MULTIPLIER:
         return '🔴 Critical'
-    # 3. Check Warning
+    # 3. Check Warning (Orange Line)
     elif value >= limit * WARNING_MULTIPLIER:
         return '🟠 Warning'
-    # 4. Otherwise, Normal
+    # 4. Otherwise, Normal (Green)
     else:
         return '🟢 Normal'
 
@@ -156,7 +156,6 @@ for i in range(0, len(available_gases), cols_per_row):
     cols = st.columns(cols_per_row)
     for j, gas in enumerate(available_gases[i:i + cols_per_row]):
         with cols[j]:
-            # Use get() for safe access to session state dictionary
             limit = st.number_input(f"{gas} Limit (ppm)", 
                                     value=st.session_state.ref_limits.get(gas, 0), 
                                     min_value=0, 
@@ -224,38 +223,62 @@ if selected_gas:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-
         # --- 6. ML & Rule-Based Conclusion/Recommendation ---
         st.subheader("💡 Analysis and AI Recommendation")
+
+        # --- Status Calculation (FIXED and REFINED) ---
+        latest_value_raw = df[selected_gas].iloc[-1]
         
-        latest_value = df[selected_gas].iloc[-1]
-        
-        # A. Rule-Based Status (Latest Sample)
-        current_status = get_rule_based_status(latest_value, limit_value)
-        
-        # Determine delta color for visual emphasis on the metric
-        if 'Critical' in current_status:
-            delta_color = 'inverse' 
-        elif 'Warning' in current_status:
+        # Check for NaN first
+        if pd.isna(latest_value_raw):
+            current_status = '⚠️ Data Error'
+            metric_value = current_status
             delta_color = 'off' 
         else:
-            delta_color = 'normal' 
+            latest_value = latest_value_raw
+            # Run the Rule-Based classification
+            current_status = get_rule_based_status(latest_value, limit_value)
+            metric_value = current_status
             
-        st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value} ppm)", current_status, delta_color=delta_color)
+            # Determine delta color based on the classified status
+            if 'Critical' in current_status:
+                delta_color = 'inverse' # Red background
+            elif 'Warning' in current_status or 'Limit Required' in current_status:
+                delta_color = 'off' # Orange/Yellow background
+            else:
+                delta_color = 'normal' # Green background
+
+        # A. Rule-Based Status (Latest Sample)
+        st.metric(f"Current {selected_gas} Status (Latest Sample: {latest_value_raw} ppm)", metric_value, delta_color=delta_color)
 
         # B. ML Predictive Warning
         if limit_value > 0:
+            
             # Check if the forecast crosses the critical limit (yhat = mean prediction)
             forecast_critical = future_forecast_results[future_forecast_results['yhat'] >= critical_limit_val]
             
             if not forecast_critical.empty:
                 projection_entry = forecast_critical.iloc[0]
                 projection_date = projection_entry['ds'].strftime('%Y-%m-%d')
+                
+                # Calculation of lead time
                 lead_time_years = projection_entry['ds'].year - datetime.date.today().year
                 
                 st.error(f"**ML PREDICTIVE WARNING:** Critical Threshold Breach Projected!")
                 st.markdown(f"The **{selected_gas}** concentration is forecasted to reach the Critical Limit of **{critical_limit_val} ppm** on or around **{projection_date}**.")
+                
                 st.markdown(f"This provides a lead time of approximately **{lead_time_years} years** for maintenance planning.")
+
+                # Display the urgent table if the lead time is 0 years or less
+                if lead_time_years <= 0:
+                    st.markdown("### ⚠️ Critical Implication: Immediate Action Required")
+                    st.markdown("The predicted lead time of **0 years** means the failure threshold is projected to be crossed within the current year or has already been breached.")
+                    
+                    st.table(pd.DataFrame({
+                        'Meaning': ['Immediate Crisis'],
+                        'DGA Implication': ['The fault is currently active, severe, and has likely been generating gas rapidly.'],
+                        'Maintenance Action': ['Immediate Action Required. Do not wait for the next annual sample. Perform urgent field inspection and potentially de-energize the transformer.']
+                    }).set_index('Meaning'))
                 
             else:
                 st.success("ML Forecast: Trend is projected to remain below the Critical Limit within the selected prediction window.")
