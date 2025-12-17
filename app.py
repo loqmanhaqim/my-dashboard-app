@@ -10,7 +10,7 @@ import datetime
 # Application Configuration
 # =========================================================
 st.set_page_config(
-    page_title="Transformer DGA Predictive Health Assessment (FYP)",
+    page_title="Transformer Oil Sampling Analysis Trend Development",
     layout="wide"
 )
 
@@ -29,25 +29,6 @@ DGA_GASES = [
     "Ethylene (C2H4)", "Acetylene (C2H2)",
     "Carbon Monoxide (CO)", "Carbon Dioxide (CO2)"
 ]
-
-def get_rule_based_status(value, limit):
-    """
-    Simple condition classification based on reference limits.
-    - Normal    : below reference limit
-    - Warning   : exceeds reference limit
-    - Critical  : exceeds twice the reference limit
-    """
-    if limit is None or limit <= 0:
-        return "🟡 Limit Required"
-
-    if value >= limit * 2:
-        return "🔴 Critical"
-    elif value >= limit:
-        return "🟠 Warning"
-    else:
-        return "🟢 Normal"
-
-
 @st.cache_resource
 def run_prophet_forecast(df, gas_col, forecast_years=5):
     """
