@@ -235,12 +235,12 @@ else:
     # ---------- Rule 2: All gases below reference ----------
    below_all_limits = True
 
-for gas, limit in st.session_state.ref_limits.items():
-    if limit is not None and limit > 0 and gas in df.columns:
-        latest_val = df[gas].iloc[-1]
-        if not pd.isna(latest_val) and latest_val > limit:
-            below_all_limits = False
-            break
+    for gas, limit in st.session_state.ref_limits.items():
+        if limit is not None and limit > 0 and gas in df.columns:
+            latest_val = df[gas].iloc[-1]
+            if not pd.isna(latest_val) and latest_val > limit:
+                below_all_limits = False
+                    break
 
 
     # ---------- Decision Priority ----------
