@@ -213,10 +213,11 @@ if selected_gas:
 
         st.plotly_chart(fig, use_container_width=True)
 
+
 # =========================================================
-# 6. Supervised ML Classification
+# 6. Supervised ML Classification (HYBRID LOGIC)
 # =========================================================
-st.subheader("🤖 Supervised ML Transformer Condition Classification")
+st.subheader("🤖 Transformer Condition Assessment (Hybrid ML + Standards)")
 
 missing = [f for f in ML_FEATURES if f not in df.columns]
 
@@ -228,23 +229,33 @@ else:
 
     label_map = {0: "🟢 Normal", 1: "🟠 Warning", 2: "🔴 Critical"}
 
-    st.success(f"Predicted Transformer Condition: **{label_map[prediction]}**")
+    # --- Rule-based override for Acetylene ---
+    latest_c2h2 = df["Acetylene (C2H2)"].iloc[-1]
 
-    if prediction == 0:
+    if not pd.isna(latest_c2h2) and latest_c2h2 > 1:
+        st.error("🔴 Critical condition detected due to high Acetylene (C2H2).")
         st.markdown(
-            "The transformer is classified as **Normal**. "
-            "Gas concentrations are within acceptable limits based on trained historical data."
-        )
-    elif prediction == 1:
-        st.markdown(
-            "The transformer is classified as **Warning**. "
-            "At least one gas parameter exceeds reference limits. "
-            "Closer monitoring is recommended."
+            "According to **IEC 60599** and **IEEE C57.104**, elevated acetylene "
+            "indicates an arcing fault and requires immediate corrective action."
         )
     else:
-        st.markdown(
-            "The transformer is classified as **Critical**. "
-            "Multiple gas parameters exceed critical thresholds. "
-            "Immediate inspection and maintenance action are strongly recommended."
-        )
+        st.success(f"ML Predicted Condition: **{label_map[prediction]}**")
+
+        if prediction == 0:
+            st.markdown(
+                "The transformer is classified as **Normal**. "
+                "Gas concentrations are within acceptable limits based on trained historical data."
+            )
+        elif prediction == 1:
+            st.markdown(
+                "The transformer is classified as **Warning**. "
+                "One or more gas parameters exceed reference limits. "
+                "Closer monitoring is recommended."
+            )
+        else:
+            st.markdown(
+                "The transformer is classified as **Critical**. "
+                "Multiple gas parameters exceed critical thresholds. "
+                "Immediate inspection and maintenance action are strongly recommended."
+            )
 
