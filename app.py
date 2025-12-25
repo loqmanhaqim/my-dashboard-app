@@ -41,7 +41,7 @@ ML_FEATURES = [
 # =========================================================
 @st.cache_resource
 def load_classification_model():
-    return joblib.load("models/dga_model.pkl")
+    return joblib.load("dga_model.pkl")
 
 clf_model = load_classification_model()
 
