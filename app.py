@@ -7,24 +7,18 @@ import joblib
 import datetime
 
 # =========================================================
-# Application Configuration
+# App Configuration
 # =========================================================
 st.set_page_config(
-    page_title="Transformer Oil Sampling Analysis Trend Development",
+    page_title="Transformer DGA ML Health Assessment",
     layout="wide"
 )
 
 # =========================================================
-# Global Constants
+# Constants
 # =========================================================
 USERNAME = "ketam"
 PASSWORD = "ketam123"
-
-DGA_GASES = [
-    "Hydrogen (H2)", "Methane (CH4)", "Ethane (C2H6)",
-    "Ethylene (C2H4)", "Acetylene (C2H2)",
-    "Carbon Monoxide (CO)", "Carbon Dioxide (CO2)"
-]
 
 ML_FEATURES = [
     "Hydrogen (H2)",
@@ -36,14 +30,20 @@ ML_FEATURES = [
     "Acetylene (C2H2)"
 ]
 
+LABEL_MAP = {
+    0: "🟢 Normal",
+    1: "🟠 Warning",
+    2: "🔴 Critical"
+}
+
 # =========================================================
-# Load Supervised ML Model
+# Load ML Model
 # =========================================================
 @st.cache_resource
-def load_classification_model():
+def load_model():
     return joblib.load("dga_model.pkl")
 
-clf_model = load_classification_model()
+clf_model = load_model()
 
 # =========================================================
 # Prophet Forecast Function
@@ -64,8 +64,7 @@ def run_prophet_forecast(df, gas_col, forecast_years=5):
     model = Prophet(
         yearly_seasonality=False,
         weekly_seasonality=False,
-        daily_seasonality=False,
-        interval_width=0.95
+        daily_seasonality=False
     )
 
     model.fit(prophet_df)
@@ -74,16 +73,15 @@ def run_prophet_forecast(df, gas_col, forecast_years=5):
 
     return model, forecast
 
-
 # =========================================================
-# 1. Login Interface
+# Login
 # =========================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
     st.title("Transformer Health Monitoring System")
-    st.subheader("User Authentication")
+    st.subheader("Login")
 
     user = st.text_input("Username")
     pwd = st.text_input("Password", type="password")
@@ -97,32 +95,28 @@ if not st.session_state.logged_in:
 
     st.stop()
 
-
 # =========================================================
-# 2. Main Dashboard
+# Dashboard
 # =========================================================
-st.title("⚡ Transformer DGA Trend and Predictive Health Assessment")
-st.success("Login successful. System ready for analysis.")
-st.markdown("---")
+st.title("⚡ Transformer DGA Trend & ML Health Assessment")
+st.success("Login successful")
 
 transformer_name = st.text_input("Transformer Name / ID", "T-XYZ-123")
 
 st.subheader("Upload DGA CSV File")
-file = st.file_uploader("Upload CSV File", type=["csv"])
+file = st.file_uploader("Upload CSV", type=["csv"])
 
 if not file:
-    st.info("Please upload a DGA CSV file to continue.")
     st.stop()
 
-
 # =========================================================
-# 3. Data Loading and Preprocessing
+# Load & Clean Data
 # =========================================================
 df = pd.read_csv(file)
 df.columns = df.columns.str.strip()
 
 if "Sampling Date" not in df.columns:
-    st.error("The CSV file must contain a 'Sampling Date' column.")
+    st.error("CSV must contain 'Sampling Date'")
     st.stop()
 
 df["Sampling Date"] = pd.to_datetime(df["Sampling Date"], errors="coerce")
@@ -131,47 +125,21 @@ for col in df.columns:
     if col != "Sampling Date":
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-st.subheader("Uploaded Data Preview")
+st.subheader("Data Preview")
 st.dataframe(df.head())
 
-available_gases = [g for g in DGA_GASES if g in df.columns]
-
 # =========================================================
-# 4. Reference Limits Input
+# Trend & Forecast
 # =========================================================
-st.subheader("Reference Gas Limits (ppm)")
-
-if "ref_limits" not in st.session_state:
-    st.session_state.ref_limits = {gas: 0 for gas in available_gases}
-
-cols = st.columns(4)
-for i, gas in enumerate(available_gases):
-    with cols[i % 4]:
-        st.session_state.ref_limits[gas] = st.number_input(
-            f"{gas} Limit (ppm)",
-            min_value=0,
-            value=st.session_state.ref_limits.get(gas, 0)
-        )
-
-st.markdown("---")
-
-
-# =========================================================
-# 5. Trend Analysis & Forecasting
-# =========================================================
-st.header(f"DGA Analysis for Transformer: {transformer_name}")
-
-selected_gas = st.selectbox("Select Gas Parameter", available_gases)
+available_gases = [g for g in ML_FEATURES if g in df.columns]
+selected_gas = st.selectbox("Select Gas for Trend Analysis", available_gases)
 
 if selected_gas:
-
-    limit_value = st.session_state.ref_limits.get(selected_gas, 0)
     forecast_years = st.slider("Forecast Period (Years)", 1, 10, 5)
 
-    model, forecast_results = run_prophet_forecast(df, selected_gas, forecast_years)
+    model, forecast = run_prophet_forecast(df, selected_gas, forecast_years)
 
-    if model and forecast_results is not None:
-
+    if model:
         fig = go.Figure()
 
         fig.add_trace(go.Scatter(
@@ -181,13 +149,13 @@ if selected_gas:
             name="Historical Data"
         ))
 
-        future_data = forecast_results[forecast_results["ds"] >= df["Sampling Date"].max()]
+        future_data = forecast[forecast["ds"] >= df["Sampling Date"].max()]
 
         fig.add_trace(go.Scatter(
             x=future_data["ds"],
             y=future_data["yhat"],
             mode="lines",
-            name="ML Forecast"
+            name="Forecast"
         ))
 
         fig.add_trace(go.Scatter(
@@ -198,77 +166,42 @@ if selected_gas:
             hoverinfo="skip"
         ))
 
-        if limit_value > 0:
-            fig.add_hline(y=limit_value, line_dash="dash", line_color="orange",
-                          annotation_text="Warning Limit")
-            fig.add_hline(y=limit_value * 2, line_dash="dash", line_color="red",
-                          annotation_text="Critical Limit")
-
         fig.update_layout(
-            title=f"{selected_gas} Trend & {forecast_years}-Year Forecast",
+            title=f"{selected_gas} Trend & Forecast",
             xaxis_title="Year",
-            yaxis_title="Gas Concentration (ppm)",
+            yaxis_title="ppm",
             hovermode="x unified"
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-
 # =========================================================
-# 6. FINAL HYBRID CONDITION ASSESSMENT
+# ML-ONLY CONDITION ASSESSMENT
 # =========================================================
-st.subheader("🤖 Transformer Condition Assessment (Hybrid Logic)")
+st.subheader("🤖 Machine Learning Condition Assessment")
 
 missing = [f for f in ML_FEATURES if f not in df.columns]
 
 if missing:
-    st.warning(f"Condition assessment unavailable. Missing columns: {missing}")
+    st.warning(f"Missing columns for ML prediction: {missing}")
 else:
     latest_sample = df[ML_FEATURES].iloc[-1:].values
     prediction = clf_model.predict(latest_sample)[0]
 
-    label_map = {0: "🟢 Normal", 1: "🟠 Warning", 2: "🔴 Critical"}
+    st.success(f"ML Predicted Condition: **{LABEL_MAP[prediction]}**")
 
-    # ---------- Rule 1: Acetylene Override ----------
-    latest_c2h2 = df["Acetylene (C2H2)"].iloc[-1]
-
-        # ---------- Rule 2: All gases below reference ----------
-    below_all_limits = True
-
-    for gas, limit in st.session_state.ref_limits.items():
-        if limit is not None and limit > 0 and gas in df.columns:
-            latest_val = df[gas].iloc[-1]
-            if not pd.isna(latest_val) and latest_val > limit:
-                below_all_limits = False
-                break
-
-
-    # ---------- Decision Priority ----------
-    if not pd.isna(latest_c2h2) and latest_c2h2 > 1:
-        st.error("🔴 Critical condition detected due to high Acetylene (C2H2).")
+    if prediction == 0:
         st.markdown(
-            "According to **IEC 60599** and **IEEE C57.104**, elevated acetylene "
-            "indicates an arcing fault and requires immediate corrective action."
+            "The ML model predicts **Normal condition**, based on learned patterns "
+            "from historical transformer data."
         )
-
-    elif below_all_limits:
-        st.success("🟢 Normal condition detected (all gases below reference limits).")
+    elif prediction == 1:
         st.markdown(
-            "All dissolved gas concentrations are below the defined reference limits. "
-            "The transformer is operating under normal condition based on international standards."
+            "The ML model predicts a **Warning condition**, indicating abnormal "
+            "gas behaviour compared to historical normal cases."
         )
-
-    else:
-        st.success(f"ML Predicted Condition: **{label_map[prediction]}**")
-
-        if prediction == 1:
-            st.markdown(
-                "One or more gas parameters exceed reference limits. "
-                "Closer monitoring and increased sampling frequency are recommended."
-            )
-        elif prediction == 2:
-            st.markdown(
-                "Multiple gas parameters exceed critical thresholds based on learned patterns. "
-                "Immediate inspection and maintenance action are recommended."
-            )
-
+    elif prediction == 2:
+        st.markdown(
+            "The ML model predicts a **Critical condition**, showing strong similarity "
+            "to previously observed fault cases in the training data."
+        )
