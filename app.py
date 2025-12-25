@@ -41,7 +41,7 @@ ML_FEATURES = [
 # =========================================================
 @st.cache_resource
 def load_classification_model():
-    return joblib.load("dga_model.pkl")
+    return joblib.load("models/dga_model.pkl")
 
 clf_model = load_classification_model()
 
@@ -215,47 +215,58 @@ if selected_gas:
 
 
 # =========================================================
-# 6. Supervised ML Classification (HYBRID LOGIC)
+# 6. FINAL HYBRID CONDITION ASSESSMENT
 # =========================================================
-st.subheader("🤖 Transformer Condition Assessment (Hybrid ML + Standards)")
+st.subheader("🤖 Transformer Condition Assessment (Hybrid Logic)")
 
 missing = [f for f in ML_FEATURES if f not in df.columns]
 
 if missing:
-    st.warning(f"ML classification unavailable. Missing columns: {missing}")
+    st.warning(f"Condition assessment unavailable. Missing columns: {missing}")
 else:
     latest_sample = df[ML_FEATURES].iloc[-1:].values
     prediction = clf_model.predict(latest_sample)[0]
 
     label_map = {0: "🟢 Normal", 1: "🟠 Warning", 2: "🔴 Critical"}
 
-    # --- Rule-based override for Acetylene ---
+    # ---------- Rule 1: Acetylene Override ----------
     latest_c2h2 = df["Acetylene (C2H2)"].iloc[-1]
 
+    # ---------- Rule 2: All gases below reference ----------
+    below_all_limits = True
+    for gas, limit in st.session_state.ref_limits.items():
+        if limit > 0:
+            latest_val = df[gas].iloc[-1]
+            if not pd.isna(latest_val) and latest_val >= limit:
+                below_all_limits = False
+                break
+
+    # ---------- Decision Priority ----------
     if not pd.isna(latest_c2h2) and latest_c2h2 > 1:
         st.error("🔴 Critical condition detected due to high Acetylene (C2H2).")
         st.markdown(
             "According to **IEC 60599** and **IEEE C57.104**, elevated acetylene "
             "indicates an arcing fault and requires immediate corrective action."
         )
+
+    elif below_all_limits:
+        st.success("🟢 Normal condition detected (all gases below reference limits).")
+        st.markdown(
+            "All dissolved gas concentrations are below the defined reference limits. "
+            "The transformer is operating under normal condition based on international standards."
+        )
+
     else:
         st.success(f"ML Predicted Condition: **{label_map[prediction]}**")
 
-        if prediction == 0:
+        if prediction == 1:
             st.markdown(
-                "The transformer is classified as **Normal**. "
-                "Gas concentrations are within acceptable limits based on trained historical data."
-            )
-        elif prediction == 1:
-            st.markdown(
-                "The transformer is classified as **Warning**. "
                 "One or more gas parameters exceed reference limits. "
-                "Closer monitoring is recommended."
+                "Closer monitoring and increased sampling frequency are recommended."
             )
-        else:
+        elif prediction == 2:
             st.markdown(
-                "The transformer is classified as **Critical**. "
-                "Multiple gas parameters exceed critical thresholds. "
-                "Immediate inspection and maintenance action are strongly recommended."
+                "Multiple gas parameters exceed critical thresholds based on learned patterns. "
+                "Immediate inspection and maintenance action are recommended."
             )
 
